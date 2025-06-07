@@ -5,6 +5,13 @@ import time
 import tkinter as tk
 from tkinter import ttk
 import os
+import sys
+
+def get_app_dir():
+    if getattr(sys, 'frozen', False):  # Running as PyInstaller EXE
+        return os.path.dirname(sys.executable)
+    else:  # Running as script
+        return os.path.dirname(os.path.abspath(__file__))
 
 def generate_ping(frequency=880, duration=0.3, decay=0.5):
     sample_rate = 44100
@@ -57,14 +64,14 @@ class MemoryMonitorApp(tk.Tk):
 
     def load_window_position(self):
         try:
-            with open("memMon-settings.txt", "r") as f:
+            with open(os.path.join(get_app_dir(), "memMon-settings.txt"), "r") as f:
                 geometry = f.read().strip()
                 self.geometry(geometry)
         except (FileNotFoundError, IOError):
             pass  # Use default geometry if file not found
 
     def save_window_position(self):
-        with open("window_position.txt", "w") as f:
+        with open(os.path.join(get_app_dir(), "memMon-settings.txt"), "w") as f:
             f.write(self.geometry())
 
     def on_window_configure(self, event):

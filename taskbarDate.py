@@ -7,6 +7,12 @@ from PyQt5.QtGui import QPainter, QColor, QFont
 import os
 import sys
 
+def get_app_dir():
+    if getattr(sys, 'frozen', False):  # Running as PyInstaller EXE
+        return os.path.dirname(sys.executable)
+    else:  # Running as script
+        return os.path.dirname(os.path.abspath(__file__))
+
 SETTINGS_FILE = "taskbarDate-settings.txt"
 WINDOW_WIDTH = 80
 WINDOW_HEIGHT = 30
@@ -16,9 +22,9 @@ def load_settings(screen_width, screen_height):
         "x": screen_width - WINDOW_WIDTH - 20,
         "y": screen_height - WINDOW_HEIGHT,
     }
-    if os.path.exists(SETTINGS_FILE):
+    if os.path.exists(os.path.join(get_app_dir(),SETTINGS_FILE)):
         try:
-            with open(SETTINGS_FILE, "r") as f:
+            with open(os.path.join(get_app_dir(),SETTINGS_FILE), "r") as f:
                 for line in f:
                     key, value = line.strip().split("=")
                     if key in ("x", "y"):
@@ -28,7 +34,7 @@ def load_settings(screen_width, screen_height):
     return settings
 
 def save_settings(settings):
-    with open(SETTINGS_FILE, "w") as f:
+    with open(os.path.join(get_app_dir(),SETTINGS_FILE), "w") as f:
         f.write(f"x={settings['x']}\n")
         f.write(f"y={settings['y']}\n")
 
@@ -69,34 +75,10 @@ class PositionDialog(QDialog):
         self.ok_btn.clicked.connect(self.accept)
         self.cancel_btn.clicked.connect(self.reject)
 
-        # For drag preview
-        self.setMouseTracking(True)
-
     def preview_move(self):
         x = self.x_spin.value()
         y = self.y_spin.value()
         self.parent().move(x, y)
-
-    def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            self.dragging = True
-            self.offset = event.pos()
-
-    def mouseMoveEvent(self, event):
-        if self.dragging:
-            # Calculate new position for the parent window
-            global_pos = self.mapToGlobal(event.pos())
-            parent_pos = global_pos - self.offset
-            # Clamp to screen bounds
-            x = min(max(0, parent_pos.x()), self.max_x)
-            y = min(max(0, parent_pos.y()), self.max_y)
-            self.x_spin.setValue(x)
-            self.y_spin.setValue(y)
-            self.parent().move(x, y)
-
-    def mouseReleaseEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            self.dragging = False
 
 class TransparentWindow(QWidget):
     def __init__(self):
@@ -144,7 +126,7 @@ class TransparentWindow(QWidget):
         menu = QMenu(self)
         menu.addAction("Set Position", self.set_position_dialog)
         menu.addSeparator()
-        menu.addAction("Exit", self.close)
+        menu.addAction("Exit", QApplication.quit)
         menu.exec_(event.globalPos())
 
     def set_position_dialog(self):
