@@ -4,6 +4,9 @@ various tools and widgets
 ### clip-invert-img
 gui - inverts colors of last copied image in clipboard
 
+### clip-extract
+gui - extracts ==highlight== and **bold** text from clipboard
+
 ### dir-largestFiles
 cli - lists the largest files of a directory and all subfolders
 
