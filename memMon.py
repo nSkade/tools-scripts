@@ -14,12 +14,13 @@ def get_app_dir():
         return os.path.dirname(os.path.abspath(__file__))
 
 def generate_ping(frequency=880, duration=0.3, decay=0.5):
+    volume = 0.2
     sample_rate = 44100
     t = np.linspace(0, duration, int(sample_rate * duration))
     wave = np.sin(2 * np.pi * frequency * t)
     envelope = np.exp(-t/decay)
     ping = wave * envelope
-    ping *= 0.5 / np.max(np.abs(ping))
+    ping *= volume * 0.5 / np.max(np.abs(ping))
     return ping.astype(np.float32)
 
 def play_sound(sound):
@@ -87,13 +88,13 @@ class MemoryMonitorApp(tk.Tk):
         mem = psutil.virtual_memory()
         usage = mem.percent
 
-        if usage > 85:
+        if usage > 75:
             self.configure(bg="#ff0000")
             self.memory_label.configure(background="#ff0000", foreground="black")
             play_sound(self.ping_sound)
         else:
             self.configure(bg="#333333")
-            self.memory_label.configure(background="#333333", foreground="black")
+            self.memory_label.configure(background="#333333", foreground="white")
 
         self.memory_label.config(text=f"Memory usage: {usage:.1f} %")
         self.after(1000, self.update_memory_display)

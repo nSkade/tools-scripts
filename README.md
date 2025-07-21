@@ -19,6 +19,9 @@ cli - compresses and scales images in pdfs to reduce size
 ### taskbarDate
 gui - displays borderless box with date, intended for the smaller taskbar on win10
 
+### taskbarRune
+gui - ...
+
 ## building
 
 build.bat builds all tools as executables
