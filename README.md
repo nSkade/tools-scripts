@@ -19,6 +19,9 @@ cli - compresses and scales images in pdfs to reduce size
 ### taskbarDate
 gui - displays borderless box with date, intended for the smaller taskbar on win10
 
+### plotFFmem
+cli - plots firefox about:memory mem dump nicely with a sunburst
+
 ### taskbarRune
 gui - ...
 
