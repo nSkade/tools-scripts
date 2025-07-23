@@ -22,6 +22,9 @@ gui - displays borderless box with date, intended for the smaller taskbar on win
 ### plotFFmem
 cli - plots firefox about:memory mem dump nicely with a sunburst
 
+### ceol
+cli - Console Emu Open Link, call with col (col.bat, Console Open Link), used to parse .lnk files pointing to folders for navigation, this updated version uses doublecmd's .hotpath xml instead. Many other .bat files for quick navigation are provided.
+
 ### taskbarRune
 gui - ...
 

@@ -1,0 +1,1 @@
+cmd -new_console
