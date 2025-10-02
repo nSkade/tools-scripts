@@ -6,6 +6,9 @@ from PyQt5.QtCore import Qt, QTimer, QDate, QPoint
 from PyQt5.QtGui import QPainter, QColor, QFont
 import os
 import sys
+import keyboard
+import threading
+import time
 
 def get_app_dir():
     if getattr(sys, 'frozen', False):  # Running as PyInstaller EXE
@@ -105,9 +108,9 @@ class TransparentWindow(QWidget):
         self.timer.timeout.connect(self.update_label)
         self.timer.start(60000)  # TODO: set back to 60000 for minute updates
 
-        self.top_timer = QTimer(self)
-        self.top_timer.timeout.connect(self.bring_to_front)
-        self.top_timer.start(10000) # bring back to front timer
+        #self.top_timer = QTimer(self)
+        #self.top_timer.timeout.connect(self.bring_to_front)
+        #self.top_timer.start(10000) # bring back to front timer
 
     def bring_to_front(self):
         self.setAttribute(Qt.WA_ShowWithoutActivating, True)
@@ -156,7 +159,18 @@ class TransparentWindow(QWidget):
         save_settings(self.settings)
 
 if __name__ == "__main__":
+    #app = QApplication(sys.argv)
+    #window = TransparentWindow()
+    #window.show()
+    #sys.exit(app.exec_())
     app = QApplication(sys.argv)
     window = TransparentWindow()
     window.show()
+
+    def bring_to_front_on_hotkey():
+        keyboard.add_hotkey('windows', lambda: (time.sleep(.2), window.raise_(), window.show()))
+        keyboard.wait()  # Blocks forever, but in a thread
+
+    threading.Thread(target=bring_to_front_on_hotkey, daemon=True).start()
+
     sys.exit(app.exec_())

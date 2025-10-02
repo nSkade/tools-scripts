@@ -11,6 +11,7 @@ import threading
 import time
 import json
 from pynput import keyboard
+import keyboard as pykb
 
 WINDOW_WIDTH = 30
 WINDOW_HEIGHT = 30
@@ -163,9 +164,9 @@ class TransparentRuneWidget(QWidget):
 
 		self.update_label()
 
-		self.timer = QTimer()
-		self.timer.timeout.connect(self.bring_to_front)
-		self.timer.start(10000)
+		#self.timer = QTimer()
+		#self.timer.timeout.connect(self.bring_to_front)
+		#self.timer.start(10000)
 
 	def update_label(self):
 		self.label.setText("ᚱᛚ" if plugin_state["enabled"] else "RL")
@@ -275,4 +276,12 @@ if __name__ == "__main__":
 	app = QApplication(sys.argv)
 	window = TransparentRuneWidget()
 	window.show()
+	#sys.exit(app.exec_())
+	
+	def bring_to_front_on_hotkey():
+		pykb.add_hotkey('windows', lambda: (time.sleep(.2), window.raise_(), window.show()))
+		pykb.wait()  # Blocks forever, but in a thread
+
+	threading.Thread(target=bring_to_front_on_hotkey, daemon=True).start()
+
 	sys.exit(app.exec_())
