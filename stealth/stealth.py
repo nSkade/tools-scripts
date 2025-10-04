@@ -23,6 +23,8 @@ from PyQt5.QtCore import (
 )
 from PyQt5.QtGui import QPainter, QPixmap, QIcon
 
+from PyQt5.QtNetwork import QLocalServer, QLocalSocket
+
 try:
 	from PyQt5.QtWinExtras import QtWin
 except ImportError:
@@ -38,6 +40,7 @@ WS_EX_LAYERED = 0x00080000
 
 ICON_FILENAME = "icon.png"
 SETTINGS_FILE = "stealth_settings.json"
+SINGLE_INSTANCE_SERVER_NAME = "StealthApp_SingleInstance_f8d4e7g3h2" 
 
 GetLayeredWindowAttributes = windll.user32.GetLayeredWindowAttributes
 GetLayeredWindowAttributes.restype = wintypes.BOOL
@@ -997,6 +1000,7 @@ class App(QWidget):
 	def show_window(self):
 		self.showNormal()
 		self.activateWindow()
+		self.update_list()
 
 	def hide_window(self):
 		self.hide()
@@ -1021,6 +1025,8 @@ class App(QWidget):
 				# 2. Hide the main window if search bar is empty
 				self.hide_window()
 				event.accept()
+		elif event.key() == Qt.Key_R:
+			self.update_list()
 		else:
 			super().keyPressEvent(event)
 			
@@ -1124,14 +1130,35 @@ if __name__ == "__main__":
 	app = QApplication(sys.argv)
 	app.setQuitOnLastWindowClosed(False)
 
-	# ... (Icon and Style setup - omitted for brevity, assumed functional)
+	# --- 1. CHECK FOR EXISTING INSTANCE (The Client Logic) ---
+	socket = QLocalSocket()
+	socket.connectToServer(SINGLE_INSTANCE_SERVER_NAME)
+	
+	# Wait for the connection, giving the existing server a chance to respond.
+	is_running = socket.waitForConnected(500) 
+	
+	if is_running:
+		# Instance is running. Send 'show' command and exit.
+		socket.write(b"show\n") 
+		socket.waitForBytesWritten(1000) # Wait for the data to be written
+		socket.disconnectFromServer()
+		socket.close()
+		sys.exit(0)
+
+	server = QLocalServer()
+	QLocalServer.removeServer(SINGLE_INSTANCE_SERVER_NAME) 
+
+	if server.listen(SINGLE_INSTANCE_SERVER_NAME) is False:
+		QMessageBox.critical(None, "Fatal Error", 
+			"Could not start the application lock server.", QMessageBox.Ok)
+		sys.exit(1)
+
 	ICON_FILE_PATH = resource_path(ICON_FILENAME)
 	try:
 		app.setWindowIcon(QIcon(ICON_FILE_PATH))
 	except Exception as e:
 		pass
 		
-	# Added simplified styling for new elements
 	app.setStyleSheet("""
 	QWidget {
 		background-color: #2b2b2b;
@@ -1163,4 +1190,29 @@ if __name__ == "__main__":
 	""")
 
 	win = App()
+
+	def handle_new_connection():
+		client_socket = server.nextPendingConnection()
+		
+		if client_socket.waitForReadyRead(2000): # Wait longer to ensure command arrives
+			command_data = client_socket.readAll()
+			command = command_data.data().decode().strip()
+			
+			if command == "show":
+				print("Received 'show' command. Bringing window to front.")
+				win.show_window() 
+		
+		client_socket.disconnectFromServer()
+		client_socket.close()
+
+	# The signal must be connected BEFORE app.exec_() is called.
+	server.newConnection.connect(handle_new_connection)
+	
+	# Run the event loop
+	exit_code = app.exec_()
+	
+	# cleanup
+	server.close()
+	QLocalServer.removeServer(SINGLE_INSTANCE_SERVER_NAME)
+
 	sys.exit(app.exec_())
