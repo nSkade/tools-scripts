@@ -910,8 +910,9 @@ class App(QWidget):
 	# Signal to safely set opacity from the worker thread
 	apply_opacity_signal = pyqtSignal(int, int)
 
-	def __init__(self):
+	def __init__(self, server_instance):
 		super().__init__()
+		self.local_server = server_instance
 		self.setWindowTitle("Stealth")
 		self.resize(350, 400)
 		self.setWindowIcon(QIcon(resource_path(ICON_FILENAME)))
@@ -1031,6 +1032,9 @@ class App(QWidget):
 			super().keyPressEvent(event)
 			
 	def exit_app(self):
+		self.local_server.close()
+		QLocalServer.removeServer(SINGLE_INSTANCE_SERVER_NAME)
+
 		self.opacity_worker.stop()
 		self.opacity_thread.quit()
 		self.opacity_thread.wait()
@@ -1135,12 +1139,12 @@ if __name__ == "__main__":
 	socket.connectToServer(SINGLE_INSTANCE_SERVER_NAME)
 	
 	# Wait for the connection, giving the existing server a chance to respond.
-	is_running = socket.waitForConnected(500) 
+	is_running = socket.waitForConnected(10)
 	
 	if is_running:
 		# Instance is running. Send 'show' command and exit.
 		socket.write(b"show\n") 
-		socket.waitForBytesWritten(1000) # Wait for the data to be written
+		#socket.waitForBytesWritten(1000) # Wait for the data to be written
 		socket.disconnectFromServer()
 		socket.close()
 		sys.exit(0)
@@ -1189,12 +1193,12 @@ if __name__ == "__main__":
 	}
 	""")
 
-	win = App()
+	win = App(server)
 
 	def handle_new_connection():
 		client_socket = server.nextPendingConnection()
 		
-		if client_socket.waitForReadyRead(2000): # Wait longer to ensure command arrives
+		if client_socket.waitForReadyRead(20): # Wait longer to ensure command arrives
 			command_data = client_socket.readAll()
 			command = command_data.data().decode().strip()
 			
@@ -1215,4 +1219,4 @@ if __name__ == "__main__":
 	server.close()
 	QLocalServer.removeServer(SINGLE_INSTANCE_SERVER_NAME)
 
-	sys.exit(app.exec_())
+	sys.exit(exit_code)
