@@ -9,17 +9,16 @@ import traceback
 import json
 import time
 
-from ctypes import wintypes, POINTER, c_ubyte, byref, windll, c_uint
+from ctypes import wintypes, POINTER, c_ubyte, byref, windll
 
 from PyQt5.QtWidgets import (
 	QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSlider,
 	QScrollArea, QLineEdit, QPushButton, QFrame, QSizePolicy,
 	QSystemTrayIcon, QMenu, QAction, QMessageBox, QDialog, QCheckBox,
-	QListWidget, QListWidgetItem, QInputDialog, QSpinBox, QStyleFactory
+	QListWidget, QListWidgetItem, QInputDialog, QSpinBox, QStyle, QStyleOptionSlider
 )
 from PyQt5.QtCore import (
-	Qt, QTimer, pyqtSignal, QSettings, QThread, QObject, 
-	QModelIndex, QSize, QVariant
+	Qt, QTimer, pyqtSignal, QThread, QObject, QPoint
 )
 from PyQt5.QtGui import QPainter, QPixmap, QIcon
 
@@ -246,8 +245,71 @@ def get_window_icon_pixmap(hwnd):
 	return None
 
 class NoWheelSlider(QSlider):
+	def __init__(self, orientation=Qt.Horizontal, parent=None):
+		super().__init__(orientation, parent)
+		self.setFocusPolicy(Qt.NoFocus)
+
 	def wheelEvent(self, event):
 		event.ignore()
+
+	def styleOption(self):
+		opt = QStyleOptionSlider()
+		self.initStyleOption(opt)
+		return opt
+
+	def mousePressEvent(self, event):
+		if event.button() == Qt.LeftButton:
+			self.setSliderPosition(self._value_from_mouse_position(event.pos()))
+			super().mousePressEvent(event) 
+		else:
+			super().mousePressEvent(event)
+
+	def _value_from_mouse_position(self, pos: QPoint):
+		minimum = self.minimum()
+		maximum = self.maximum()
+		slider_range = maximum - minimum
+		style = self.style()
+
+		if self.orientation() == Qt.Horizontal:
+			handle_width = style.pixelMetric(QStyle.PM_SliderLength, self.styleOption(), self)
+			total_usable_track = self.width() - handle_width
+
+			if total_usable_track <= 0:
+				return minimum
+
+			relative_pos_center = pos.x() - (handle_width / 2)
+			clamped_pos = max(0, min(relative_pos_center, total_usable_track))
+			
+			value_fraction = clamped_pos / total_usable_track
+			new_value = minimum + (value_fraction * slider_range)
+			
+		else:
+			handle_height = style.pixelMetric(QStyle.PM_SliderLength, self.styleOption(), self)
+			total_usable_track = self.height() - handle_height
+				
+			if total_usable_track <= 0:
+				return minimum
+				
+			relative_pos_from_bottom = self.height() - pos.y()
+			relative_pos_center = relative_pos_from_bottom - (handle_height / 2)
+
+			clamped_pos = max(0, min(relative_pos_center, total_usable_track))
+
+			value_fraction = clamped_pos / total_usable_track
+			new_value = minimum + (value_fraction * slider_range)
+
+		step = self.singleStep()
+		if step > 0:
+			new_value = round(new_value / step) * step
+
+		return int(max(minimum, min(new_value, maximum)))
+
+	def mouseMoveEvent(self, event):
+		if event.buttons() & Qt.LeftButton:
+			self.setSliderPosition(self._value_from_mouse_position(event.pos()))
+			event.accept()
+		else:
+			super().mouseMoveEvent(event)
 
 
 class MarqueeLabel(QLabel):
