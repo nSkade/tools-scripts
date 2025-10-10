@@ -5,32 +5,23 @@ import win32gui
 import win32process
 import win32con
 import ctypes
-import traceback
 import json
 import time
 
 from ctypes import wintypes, POINTER, c_ubyte, byref, windll
 
-from PyQt5.QtWidgets import (
+from PySide6.QtWidgets import (
 	QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSlider,
 	QScrollArea, QLineEdit, QPushButton, QFrame, QSizePolicy,
-	QSystemTrayIcon, QMenu, QAction, QMessageBox, QDialog, QCheckBox,
+	QSystemTrayIcon, QMenu, QMessageBox, QDialog, QCheckBox,
 	QListWidget, QListWidgetItem, QInputDialog, QSpinBox, QStyle, QStyleOptionSlider
 )
-from PyQt5.QtCore import (
-	Qt, QTimer, pyqtSignal, QThread, QObject, QPoint
+from PySide6.QtCore import (
+	Qt, QTimer, Signal, QThread, QObject, QPoint
 )
-from PyQt5.QtGui import QPainter, QPixmap, QIcon
+from PySide6.QtGui import QPainter, QPixmap, QIcon, QAction, QImage
 
-from PyQt5.QtNetwork import QLocalServer, QLocalSocket
-
-try:
-	from PyQt5.QtWinExtras import QtWin
-except ImportError:
-	class DummyQtWin:
-		def fromHICON(*args, **kwargs):
-			return QPixmap()
-	QtWin = DummyQtWin()
+from PySide6.QtNetwork import QLocalServer, QLocalSocket
 
 # --- Windows API Constants and Functions (Unchanged) ---
 LWA_ALPHA = 0x00000002
@@ -182,10 +173,127 @@ def check_rule_match(title_lower, exe_name_lower, rule):
 
 # --- Custom Qt Widgets ---
 
+from ctypes import wintypes
+
+class ICONINFO(ctypes.Structure):
+	_fields_ = [
+		("fIcon", wintypes.BOOL),
+		("xHotspot", wintypes.DWORD),
+		("yHotspot", wintypes.DWORD),
+		("hbmMask", wintypes.HBITMAP),
+		("hbmColor", wintypes.HBITMAP),
+	]
+
+
+def from_hicon_to_pixmap(hicon):
+	windll.gdi32.GetObjectW.argtypes = [ctypes.c_void_p, wintypes.INT, ctypes.c_void_p]
+	windll.gdi32.GetObjectW.restype = wintypes.INT
+	class BITMAP(ctypes.Structure):
+		_fields_ = [
+			('bmType', wintypes.LONG),
+			('bmWidth', wintypes.LONG),
+			('bmHeight', wintypes.LONG),
+			('bmWidthBytes', wintypes.LONG),
+			('bmPlanes', wintypes.WORD),
+			('bmBitsPixel', wintypes.WORD),
+			('bmBits', ctypes.c_void_p)
+		]
+	if not hicon:
+		return None
+
+	icon_info = ICONINFO()
+	if not windll.user32.GetIconInfo(hicon, ctypes.byref(icon_info)):
+		return None
+
+	bmp = icon_info.hbmColor
+	bmp_handle = bmp.value if hasattr(bmp, 'value') else bmp
+
+	bitmap = BITMAP()
+	bmp_handle_c = ctypes.c_void_p(bmp_handle if isinstance(bmp_handle, int) else bmp_handle.value)
+	windll.gdi32.GetObjectW(bmp_handle_c, ctypes.sizeof(bitmap), ctypes.byref(bitmap))
+
+	width, height = bitmap.bmWidth, bitmap.bmHeight
+
+	hdc = windll.user32.GetDC(0)
+	hdc_mem = windll.gdi32.CreateCompatibleDC(hdc)
+	oldbmp = windll.gdi32.SelectObject(hdc_mem, bmp_handle_c)
+
+	# Prepare BITMAPINFO
+	class BITMAPINFOHEADER(ctypes.Structure):
+		_fields_ = [
+			("biSize", wintypes.DWORD),
+			("biWidth", wintypes.LONG),
+			("biHeight", wintypes.LONG),
+			("biPlanes", wintypes.WORD),
+			("biBitCount", wintypes.WORD),
+			("biCompression", wintypes.DWORD),
+			("biSizeImage", wintypes.DWORD),
+			("biXPelsPerMeter", wintypes.LONG),
+			("biYPelsPerMeter", wintypes.LONG),
+			("biClrUsed", wintypes.DWORD),
+			("biClrImportant", wintypes.DWORD),
+		]
+
+	class BITMAPINFO(ctypes.Structure):
+		_fields_ = [
+			("bmiHeader", BITMAPINFOHEADER),
+			("bmiColors", ctypes.c_uint32 * 3)	# dummy
+		]
+
+	bmi = BITMAPINFO()
+	bmi.bmiHeader.biSize = ctypes.sizeof(BITMAPINFOHEADER)
+	bmi.bmiHeader.biWidth = width
+	bmi.bmiHeader.biHeight = -height  # Negative for top-down DIB
+	bmi.bmiHeader.biPlanes = 1
+	bmi.bmiHeader.biBitCount = 32
+	bmi.bmiHeader.biCompression = 0  # BI_RGB
+
+	image_size = width * height * 4
+	buffer = (ctypes.c_ubyte * image_size)()
+
+	bits = windll.gdi32.GetDIBits(
+		hdc_mem,
+		bmp_handle_c,
+		0,
+		height,
+		ctypes.byref(buffer),
+		ctypes.byref(bmi),
+		0  # DIB_RGB_COLORS
+	)
+
+	# Cleanup
+	windll.gdi32.SelectObject(hdc_mem, oldbmp)
+	windll.gdi32.DeleteDC(hdc_mem)
+	windll.user32.ReleaseDC(0, hdc)
+	if icon_info.hbmMask:
+		mask_handle = icon_info.hbmMask
+		if hasattr(mask_handle, 'value'):
+			mask_handle = mask_handle.value
+		windll.gdi32.DeleteObject(ctypes.c_void_p(mask_handle))
+
+	if icon_info.hbmColor:
+		color_handle = icon_info.hbmColor
+		if hasattr(color_handle, 'value'):
+			color_handle = color_handle.value
+		windll.gdi32.DeleteObject(ctypes.c_void_p(color_handle))
+
+	windll.user32.DestroyIcon(ctypes.c_void_p(hicon))
+
+	if bits == 0:
+		return None
+
+	# Create QImage from BGRA buffer
+	image = QImage(buffer, width, height, QImage.Format_ARGB32)
+	pixmap = QPixmap.fromImage(image)
+
+	if pixmap.isNull():
+		return None
+	return pixmap
+
+
 def get_icon_from_exe(exe_path):
 	hIcon_big = wintypes.HANDLE()
 	hIcon_small = wintypes.HANDLE()
-
 	try:
 		result = windll.shell32.ExtractIconExW(
 			exe_path,
@@ -194,24 +302,25 @@ def get_icon_from_exe(exe_path):
 			byref(hIcon_small),
 			1
 		)
-
-		if result <= 0: return None
+		if result <= 0:
+			return None
 
 		hIcon = hIcon_big.value if hIcon_big.value else hIcon_small.value
 
-		if hIcon:
-			pixmap = QtWin.fromHICON(hIcon)
+		pixmap = from_hicon_to_pixmap(hIcon)
 
-			if hIcon_big.value: windll.user32.DestroyIcon(hIcon_big.value)
-			if hIcon_small.value and hIcon_small.value != hIcon_big.value: windll.user32.DestroyIcon(hIcon_small.value)
+		if hIcon_big.value:
+			windll.user32.DestroyIcon(hIcon_big.value)
+		if hIcon_small.value and hIcon_small.value != hIcon_big.value:
+			windll.user32.DestroyIcon(hIcon_small.value)
 
-			if not pixmap.isNull(): return pixmap
-
-		return None
+		return pixmap
 
 	except Exception:
-		if hIcon_big.value: windll.user32.DestroyIcon(hIcon_big.value)
-		if hIcon_small.value and hIcon_small.value != hIcon_big.value: windll.user32.DestroyIcon(hIcon_small.value)
+		if hIcon_big.value:
+			windll.user32.DestroyIcon(hIcon_big.value)
+		if hIcon_small.value and hIcon_small.value != hIcon_big.value:
+			windll.user32.DestroyIcon(hIcon_small.value)
 		return None
 
 
@@ -223,12 +332,9 @@ def get_window_icon_pixmap(hwnd):
 	if not icon_handle:
 		icon_handle = win32gui.GetClassLong(hwnd, win32con.GCL_HICON)
 
-	if icon_handle:
-		try:
-			pixmap = QtWin.fromHICON(icon_handle)
-			if not pixmap.isNull(): return pixmap
-		except Exception:
-			pass
+	pixmap = from_hicon_to_pixmap(icon_handle)
+	if pixmap:
+		return pixmap
 
 	try:
 		_, pid = win32process.GetWindowThreadProcessId(hwnd)
@@ -237,8 +343,8 @@ def get_window_icon_pixmap(hwnd):
 
 		if exe_path and os.path.isfile(exe_path):
 			pixmap = get_icon_from_exe(exe_path)
-
-			if pixmap and not pixmap.isNull(): return pixmap
+			if pixmap:
+				return pixmap
 	except (psutil.NoSuchProcess, Exception):
 		pass
 
@@ -325,9 +431,9 @@ class MarqueeLabel(QLabel):
 		self.timer.start(self.speed)
 
 	def update_offset(self):
-		if self.fontMetrics().width(self.text()) > self.width():
+		if self.fontMetrics().horizontalAdvance(self.text()) > self.width():
 			self.offset -= 2
-			if abs(self.offset) > self.fontMetrics().width(self.text()):
+			if abs(self.offset) > self.fontMetrics().horizontalAdvance(self.text()):
 				self.offset = self.width()
 			self.update()
 		else:
@@ -339,7 +445,7 @@ class MarqueeLabel(QLabel):
 		painter.setPen(self.palette().color(self.foregroundRole()))
 		text = self.text()
 		fm = self.fontMetrics()
-		text_width = fm.width(text)
+		text_width = fm.horizontalAdvance(text)
 		if text_width <= self.width():
 			painter.drawText(self.rect(), Qt.AlignLeft | Qt.AlignVCenter, text)
 		else:
@@ -350,8 +456,8 @@ class MarqueeLabel(QLabel):
 
 # --- Opacity Worker Thread ---
 class OpacityWorker(QObject):
-	set_opacity_signal = pyqtSignal(int, int) # (hwnd, opacity)
-	update_gui_signal = pyqtSignal()
+	set_opacity_signal = Signal(int, int) # (hwnd, opacity)
+	update_gui_signal = Signal()
 
 	def __init__(self, settings, parent=None):
 		super().__init__(parent)
@@ -443,7 +549,7 @@ class OpacityRuleWidget(QWidget):
 
 
 class SettingsDialog(QDialog):
-	settings_updated = pyqtSignal()
+	settings_updated = Signal()
 
 	def __init__(self, app_settings, parent=None):
 		super().__init__(parent)
@@ -970,7 +1076,7 @@ class ProcessEntry(QFrame):
 
 class App(QWidget):
 	# Signal to safely set opacity from the worker thread
-	apply_opacity_signal = pyqtSignal(int, int)
+	apply_opacity_signal = Signal(int, int)
 
 	def __init__(self, server_instance):
 		super().__init__()

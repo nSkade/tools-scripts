@@ -1,9 +1,9 @@
-from PyQt5.QtWidgets import (
+from PySide6.QtWidgets import (
 	QApplication, QLabel, QWidget, QMenu, QSpinBox,
 	QPushButton, QHBoxLayout, QGridLayout, QDialog
 )
-from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QFont
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QFont
 
 import os
 import sys
@@ -24,7 +24,12 @@ MAX_COMBO_LENGTH = 1
 # --------- Settings loading from JSON ---------
 
 def get_app_dir():
-	return os.path.dirname(getattr(sys, '_MEIPASS', os.path.abspath(__file__)))
+	if getattr(sys, 'frozen', False):
+		# Running as PyInstaller EXE
+		return os.path.dirname(sys.executable)
+	else:
+		# Running as a script
+		return os.path.dirname(os.path.abspath(__file__))
 
 def load_settings(screen_width, screen_height):
 	global MAX_COMBO_LENGTH, RUNE_MAP
