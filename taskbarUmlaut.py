@@ -15,7 +15,7 @@ import keyboard as pykb
 
 WINDOW_WIDTH = 30
 WINDOW_HEIGHT = 30
-SETTINGS_FILE = "taskbarRune-settings.json"
+SETTINGS_FILE = "taskbarUmlaut-settings.json"
 
 plugin_state = {"enabled": False}
 RUNE_MAP = {}
@@ -36,54 +36,22 @@ def load_settings(screen_width, screen_height):
 
 	path = os.path.join(get_app_dir(), SETTINGS_FILE)
 	if not os.path.exists(path):
-		# Default fallback settings
+		# Default fallback settings focused on Umlauts
 		default_settings = {
 			"x": 1565,
 			"y": 1050,
 			"rune_map": {
-				"a": "ᚪ",
-				"b": "ᛒ",
-				"c": "ᚳ",
-				"d": "ᛞ",
-				"e": "ᛖ",
-				"f": "ᚠ",
-				"g": "ᚷ",
-				"G": "ᚸ",
-				"h": "ᚻ",
-				"i": "ᛁ",
-				"j": "ᛄ",
-				"J": "ᛡ",
-				"k": "ᛣ",
-				"K": "ᛤ",
-				"l": "ᛚ",
-				"m": "ᛗ",
-				"n": "ᚾ",
-				"o": "ᚩ",
-				"p": "ᛈ",
-				"q": "ᛢ",
-				"r": "ᚱ",
-				"s": "ᛋ",
-				"t": "ᛏ",
-				"u": "ᚢ",
-				"v": "ᚠ",
-				"w": "ᚹ",
-				"x": "ᛉ",
-				"y": "ᚣ",
-				"z": "ᛇ",
-				
-				"th": "ᚦ",
-				"ng": "ᛝ",
-				"oe": "ᛟ",
-				"ö": "ᛟ",
-				"ae": "ᚫ",
-				"ä": "ᚫ",
-				"ea": "ᛠ",
-				"st": "ᛥ",
-				
-				",": "᛫",
-				".": "᛫",
-				":": "᛬",
-				"+": "᛭",
+				"ae": "ä",
+				"oe": "ö",
+				"ue": "ü",
+				"ss": "ß",
+				"Ae": "Ä",
+				"Oe": "Ö",
+				"Ue": "Ü",
+				"AE": "Ä",
+				"OE": "Ö",
+				"UE": "Ü",
+				"SS": "ẞ"
 			}
 		}
 		with open(path, "w", encoding="utf-8") as f:
@@ -169,12 +137,8 @@ class TransparentRuneWidget(QWidget):
 
 		self.update_label()
 
-		#self.timer = QTimer()
-		#self.timer.timeout.connect(self.bring_to_front)
-		#self.timer.start(10000)
-
 	def update_label(self):
-		self.label.setText("ᚱᛚ" if plugin_state["enabled"] else "RL")
+		self.label.setText("ü" if plugin_state["enabled"] else "u")
 
 	def toggle_mode(self):
 		plugin_state["enabled"] = not plugin_state["enabled"]
@@ -240,7 +204,7 @@ def run_keyboard_listener():
 				last_two_chars[0] = last_two_chars[1]
 				last_two_chars[1] = c
 
-				# Only check combo if both are not None
+				# Check for combo (ae, oe, ue, ss)
 				if last_two_chars[0] is not None and last_two_chars[1] is not None:
 					combo = ''.join(last_two_chars)
 					if combo in RUNE_MAP and len(combo) == 2:
@@ -253,23 +217,14 @@ def run_keyboard_listener():
 						ignore_next_chars.append(RUNE_MAP[combo])
 						last_two_chars = [None, None]
 						return
-
-				if c in RUNE_MAP and len(c) == 1:
-					kb_controller.press(keyboard.Key.backspace)
-					kb_controller.release(keyboard.Key.backspace)
-					kb_controller.press(RUNE_MAP[c])
-					kb_controller.release(RUNE_MAP[c])
-					ignore_next_chars.append(RUNE_MAP[c])
 			else:
 				if key == keyboard.Key.backspace:
 					return
 				last_two_chars[0] = last_two_chars[1]
 				last_two_chars[1] = None
-			#print(last_two_chars)
-			#print(ignore_next_chars)
-			
+
 		except Exception as e:
-			print("[RunePlugin] Key press error:", e)
+			print("[UmlautTool] Key press error:", e)
 
 	with keyboard.Listener(on_press=on_press) as listener:
 		listener.join()
@@ -281,11 +236,10 @@ if __name__ == "__main__":
 	app = QApplication(sys.argv)
 	window = TransparentRuneWidget()
 	window.show()
-	#sys.exit(app.exec_())
-	
+
 	def bring_to_front_on_hotkey():
 		pykb.add_hotkey('windows', lambda: (time.sleep(.2), window.raise_(), window.show()))
-		pykb.wait()  # Blocks forever, but in a thread
+		pykb.wait()
 
 	threading.Thread(target=bring_to_front_on_hotkey, daemon=True).start()
 
