@@ -4,3 +4,4 @@ pyinstaller --onefile --windowed clip-invert-img.py
 pyinstaller --onefile --windowed clip-extract.py
 pyinstaller --onefile pdf-compress.py
 pyinstaller --onefile dir-largestFiles.py
+pyinstaller --onefile --windowed --hidden-import "pynput.keyboard._win32" --hidden-import "pynput.mouse._win32" taskbarUmlaut.py
