@@ -17,7 +17,7 @@ WINDOW_WIDTH = 30
 WINDOW_HEIGHT = 30
 SETTINGS_FILE = "taskbarUmlaut-settings.json"
 
-plugin_state = {"enabled": False}
+plugin_state = {"enabled": True}
 RUNE_MAP = {}
 MAX_COMBO_LENGTH = 1
 
